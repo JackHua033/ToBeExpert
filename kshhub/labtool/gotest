@@ -1,0 +1,49 @@
+#!/usr/bin/ksh
+nsNum=`kubectl get ns | awk '{print $1}' | wc -l`
+if [ $nsNum == 1 ]
+then
+    nsName=`kubectl get ns | awk '{print $1}'`
+else
+    echo ">>>Which udm namespace do you want?"
+    select ns in `kubectl get ns | awk '{print $1}'`
+    do
+        break
+    done
+    nsName=$ns
+fi
+
+if [ "$nsName" == "" ]
+then
+    print "ERROR: no udm namesapce."
+    exit 0
+fi
+echo "You have selected namespace: $nsName"
+
+podNum=`kubectl get pods -n $nsName | grep test | awk '{print $1}' | wc -l`
+if [ $podNum == 1 ]
+then
+    podName=`kubectl get pods -n $nsName| grep test | awk '{print $1}'`
+else
+    echo ">>>Which pod do you want?"
+    select pod in `kubectl get pods -n $nsName | grep test | awk '{print $1}'`
+    do
+        break
+    done
+    podName=$pod
+fi
+
+if [ "$podName" == "" ]
+then
+    print "ERROR: no Running pod for udm namesapce: $nsName"
+    exit 0
+fi
+echo "You have selected: $podName, now enter it."
+
+podState=`kubectl get pods -n $nsName | grep $podName | awk '{print $3}'`
+if [ "$podState" == "Running" ]
+then
+    kubectl exec -it $podName -n $nsName bash
+else
+    echo "ERROR: $podName is in wrong state - $podState"
+fi
+

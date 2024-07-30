@@ -1,0 +1,63 @@
+#!/usr/bin/ksh
+serviceName=$1
+binaryPath=$2
+
+if [ "$serviceName" == "" ]
+then
+    print "ERROR: Please input service name, such as: uecm"
+    exit 0
+fi
+
+if [ "$binaryPath" == "" ]
+then
+    print "ERROR: Please input binary path."
+    exit 0
+fi
+
+print "Your intput service is: $serviceName, the binary path is: $binaryPath"
+nsNum=`kubectl get ns | awk '{print $1}' | wc -l`
+if [ $nsNum == 1 ]
+then
+    nsName=`kubectl get ns | awk '{print $1}'`
+else
+    echo ">>>Which udm namespace do you want?"
+    select ns in `kubectl get ns | awk '{print $1}'`
+    do
+        break
+    done
+    nsName=$ns
+fi
+
+if [ "$nsName" == "" ]
+then
+    print "ERROR: no udm namesapce."
+    exit 0
+fi
+echo "You have selected namespace: $nsName"
+
+podNum=`kubectl get pods -n $nsName | grep udm$serviceName | awk '{print $1}' | wc -l`
+if [ $podNum == 1 ]
+then
+    podName=`kubectl get pods -n $nsName| grep udm$serviceName | awk '{print $1}'`
+else
+    echo ">>>Which pod do you want?"
+    select pod in `kubectl get pods -n $nsName | grep udm$serviceName | awk '{print $1}'`
+    do
+        break
+    done
+    podName=$pod
+fi
+
+if [ "$podName" == "" ]
+then
+    print "ERROR: no Running pod for udm namesapce: $nsName, service: $servicename"
+    exit 0
+fi
+echo "You have selected: $podName, now enter it."
+
+for i in `ls $binaryPath`
+do
+    echo "kubectl cp $binaryPath/$i $podName:/tcnVol/$i -c $serviceName-mcc -n $nsName"
+    kubectl cp $binaryPath/$i $podName:/tcnVol/$i -c $serviceName-mcc -n $nsName
+done
+

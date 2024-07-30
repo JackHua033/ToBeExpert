@@ -1,0 +1,19 @@
+########################################################################
+#
+# file:    debugassist.gmk
+#
+# author  : catherine.ye
+# e-mail  : catherine.ye@nokia-sbell.com
+# phone   :
+#
+# mail-notification : YES
+#  
+########################################################################
+CATCH_FILE ( $GMPS_TOP_hss1/cloud_native/debugassist/src/debugassist/scripts/build.sh)
+
+# Syntax of macro RUN_TESTTOOL
+#
+# RUN_TESTTOOL(GMSTarget,tool,args)
+
+RUN_TESTTOOL (debugassist, $GMPS_TOP_hss1/cloud_native/debugassist/src/debugassist/scripts/build.sh, gmbuild)
+

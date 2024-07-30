@@ -1,0 +1,33 @@
+#usage: ./difftool dnfile dbkeysfile
+
+# store dn file name
+dnFile=$1
+
+# store db keys file name
+dbKeysFile=$2
+
+# get shareddata id from dn file
+cat $dnFile | grep "sharedDataId=" | awk -F " " '{print $2}' | awk -F "," '{print $1}' | awk -F "=" '{print $2}' >dnIdList.txt
+
+# get shareddata id from db keys file
+cat $dbKeysFile | awk -F "\"" '{print $2}' >keysIdList.txt
+
+foundId="false"
+cat dnIdList.txt | while read line1
+do
+	cat keysIdList.txt | while read line2
+	do
+		if [ "$line1" == "$line2" ]
+		then
+			foundId="true"
+			break
+		fi
+	done
+
+	if [ "$foundId" == "false" ]
+	then
+		echo "$line1 was not found in DB"
+	fi
+done
+
+rm -rf dnIdList.txt keysIdList.txt

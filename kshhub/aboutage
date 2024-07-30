@@ -1,0 +1,58 @@
+#!/bin/bash 
+
+## time difference function takes an argument in seconds, and then calculates, 
+# declares and fills variables 'years' 'days' 'hours' 'minutes' and 'seconds' 
+# representing the time in seconds given as the argument. The values are only 
+# declared as necessary allowing a test for their presence. 
+function sec2ydhms { 
+
+    [ -n $1 ] || { printf "%s() error: insufficient arguments\n" "$FUNCNAME"; return 1; } 
+
+    local secperday=$((24 * 3600)) 
+    local secperyr=$((365 * secperday)) 
+    local remain=$1 
+
+    # printf "\nremain: %s\n\n" "$remain" 
+
+    if [ "$remain" -ge "$secperyr" ]; then 
+     declare -g years=$((remain/secperyr)) 
+     remain=$((remain - (years * secperyr))) 
+    fi 
+
+    if [ "$remain" -ge "$secperday" ]; then 
+     declare -g days=$((remain/secperday)) 
+     remain=$((remain - (days * secperday))) 
+    fi 
+
+    if [ "$remain" -ge 3600 ]; then 
+     declare -g hours=$((remain/3600)) 
+     remain=$((remain - (hours * 3600))) 
+    fi 
+
+    if [ "$remain" -ge 60 ]; then 
+     declare -g minutes=$((remain/60)) 
+    fi 
+
+    declare -g seconds=$((remain - (minutes * 60))) 
+} 
+
+oifs=$IFS      # save old IFS, and set to only break on newline 
+IFS=$'\n'      # allowing date formats containing whitespace 
+#printf "\n Enter the date for Easter (in past): " 
+#read edate      # read date entered 
+edate="07/08/2021"
+
+eepoch=$(date -d "$edate" +%s) # convert Easter date to seconds since epoch 
+now=$(date +%s)     # get current time since epoch 
+
+sec2ydhms $((now-eepoch))  # compute time from Easter in Y,D,H,M,S 
+
+## print time since Easter 
+printf "\n Time since %s:\n\n" "$(date -d @"${eepoch}")" 
+[ -n "$years" ] && printf " %4s years\n" "$years" 
+[ -n "$days" ] && printf " %4s days\n" "$days" 
+[ -n "$hours" ] && printf " %4s hours\n" "$hours" 
+[ -n "$minutes" ] && printf " %4s minutes\n" "$minutes" 
+[ -n "$seconds" ] && printf " %4s seconds\n\n" "$seconds" 
+
+exit 0 

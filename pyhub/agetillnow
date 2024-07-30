@@ -1,0 +1,94 @@
+#!/usr/bin/python
+
+import os
+import sys
+import datetime
+
+perMonthMaxDays = [-1, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+
+# function to check if Leap year
+def isLeapYear(year):
+    return True if (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0) else False
+
+# function to get max days of month via year
+def getMaxDay(month, year = -1):
+    maxDay = perMonthMaxDays[month]
+    if year != -1 and month == 2:
+        if isLeapYear(year):
+            maxDay += 1
+    return maxDay
+
+# function to get age
+def getAgeTillnow(year, month, day):
+    currentYear  = datetime.datetime.now().year
+    currentMonth = datetime.datetime.now().month
+    currentDay   = datetime.datetime.now().day
+
+    tillNowYears = currentYear - year
+
+    if tillNowYears > 0:
+        if month > currentMonth:
+            tillNowYears  = tillNowYears - 1
+            tillNowMonths = (12 - month) + currentMonth
+            if day > currentDay:
+                tillNowMonths=tillNowMonths - 1
+                if currentMonth == 1:
+                    preYear=currentYear - 1
+                    preMonth=12
+                else:
+                    preYear=currentYear
+                    preMonth=currentMonth - 1
+                preMonthMaxDay = getMaxDay(preMonth, preYear)
+                tillNowDays = preMonthMaxDay - day + currentDay
+            else:
+                tillNowDays=currentDay - day
+        elif month == currentMonth:
+            if day > currentDay:
+                tillNowYears=tillNowYears - 1
+                tillNowMonths=11
+                if currentMonth == 1:
+                    preYear=currentYear - 1
+                    preMonth=12
+                else:
+                    preYear=currentYear
+                    preMonth=currentMonth - 1
+                preMonthMaxDay = getMaxDay(preMonth, preYear)
+                tillNowDays = preMonthMaxDay - day + currentDay
+            else:
+                tillNowMonths=0
+                tillNowDays=currentDay - day
+        else:
+            tillNowMonths=currentMonth - month
+            if day > currentDay:
+                tillNowMonths=tillNowMonths - 1
+                preYear=currentYear
+                preMonth=currentMonth - 1
+                preMonthMaxDay = getMaxDay(preMonth, preYear)
+                tillNowDays = preMonthMaxDay - day + currentDay
+            else:
+                tillNowDays=currentDay - day
+    else:
+        tillNowMonths=currentMonth - month
+        if day > currentDay:
+            tillNowMonths=tillNowMonths - 1
+            preYear=currentYear
+            preMonth=currentMonth - 1
+            preMonthMaxDay = getMaxDay(preMonth, preYear)
+            tillNowDays = preMonthMaxDay - day + currentDay
+        else:
+            tillNowDays=currentDay - day
+    return tillNowYears, tillNowMonths, tillNowDays
+
+# Main function
+if __name__ == "__main__":
+    #bornYear, bornMonth, bornDay = 2021, 7, 8
+    if len(sys.argv) != 4:
+        print("ERROR: wrong born date input, please follow Year Month Day format. E.g. ./agetillnow 2020 1 1\n")
+        sys.exit(0)
+    bornYear, bornMonth, bornDay = sys.argv[1], sys.argv[2], sys.argv[3]
+    try:
+        ageYears, ageMonths, ageDays = getAgeTillnow(int(bornYear), int(bornMonth), int(bornDay))
+        print('Age till now: {} Years {} Months {} Days.'.format(ageYears, ageMonths, ageDays))
+    except Exception as e:
+        print('error:', e)
+

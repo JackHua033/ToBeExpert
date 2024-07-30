@@ -1,0 +1,17 @@
+alias getpod='kubectl get pods'
+
+#service container
+alias ee='/root/jack/goservice ee'
+alias sdm='/root/jack/goservice sdm'
+alias nim='/root/jack/goservice nim'
+alias uecm='/root/jack/goservice uecm'
+
+#service mcc container
+alias eemcc='/root/jack/gomcc ee'
+alias sdmmcc='/root/jack/gomcc sdm'
+alias nimmcc='/root/jack/gomcc nim'
+alias uecmmcc='/root/jack/gomcc uecm'
+
+#testclient
+alias gotest='/root/jack/gotest'
+

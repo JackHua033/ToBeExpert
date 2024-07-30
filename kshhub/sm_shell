@@ -1,0 +1,415 @@
+#!/bin/ksh93
+export PATH=/opt/exp/bin:/usr/bin:/usr/sbin:$PATH
+
+typeset VERSION="MIME-Version:1.0"
+typeset CONTTYPE="Content-type:text/html;charset=gb2312"
+#typeset FROM="From: no5cms@lsslogin1.ih.lucent.com" 
+typeset FROM="From: CodeStriker@alcatel-lucent.com" 
+typeset HTMLPATH="/var/www/codestriker_test/codestriker-1.9.10"
+#typeset HTMLPATH="/var/www/codestriker/codestriker-1.9.10"
+typeset SERVERURL="http://lssweb5.ih.lucent.com/codestriker_test/codestriker.pl?action=view&topic="
+#typeset SERVERURL="http://lssweb5.ih.lucent.com/codestriker/codestriker.pl?action=view&topic="
+typeset DBACCESSCMD="/opt/csw/bin/mysql -u codestriker_test -D codestrikerdb_test -pcspasswd"
+#typeset DBACCESSCMD="/opt/csw/bin/mysql -u codestriker -D codestrikerdb -p17xpexzc!!"
+typeset PCTIME="UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(creation_ts) > 1*1*60"
+typeset PLTIME="UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(creation_ts) < 7*24*3600"
+typeset PENDLIMITTIME="UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(creation_ts) > 7*24*3600"
+typeset PENDDELETETIME="UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(creation_ts) > 15*24*3600"
+typeset OPENLIMITTIME="UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(creation_ts) > 30*24*3600"
+
+################################################################
+#
+# Function: date2days
+#
+# Description:
+#	get the days according to the input date.
+#
+################################################################
+function date2days
+{
+	echo "$*" | awk '{
+		ztime=int((14-$2)/12);
+		zyear=$1+4800-ztime;
+		zmonth=$2+12*ztime-3;
+		days=int((153*zmonth+2)/5)+$3+zyear*365+int(zyear/4)-int(zyear/100)+int(zyear/400)-2472633;
+		print days
+	}'
+}
+
+
+
+
+################################################################
+# 
+# Function: getauthors
+#
+# Description:
+#	get authors which topic is still in Pending or Open
+#	state.
+#
+################################################################
+function getauthors
+{
+	ystate=$1
+	litime=$2
+	litime2=$3
+
+	tauthors=$(echo "select author from topic where state=${ystate} and ${litime} and ${litime2};" | ${DBACCESSCMD})
+
+	# remove the first data of output of mysql.
+	tauthors=${tauthors:7}
+	echo "the author is: ${tauthors}"
+
+	# remove duplicate names
+	for author in ${tauthors}
+	do
+		if [ -z "${authors}" ]
+		then
+			authors="${author}"
+		else
+			authors="${authors}\n${author}"
+		fi
+	done
+	authors=$(echo ${authors} | /bin/sort -u)
+	echo ${authors}
+}
+
+
+
+
+
+################################################################
+#
+# Function: gethtmlname
+#
+# Description:
+#	generate the name of html file for each input author.
+#
+################################################################
+function gethtmlname
+{
+	# get the input parameter
+	iauthor=$1
+
+	# generate the html name for input author
+	nahtml=$(echo ${iauthor//\./-})
+	nahtml=$(echo ${nahtml/@/-})
+
+	HTMLNAME=${HTMLPATH}/${nahtml}.html
+	echo ${HTMLNAME}
+}
+
+
+
+
+################################################################
+#
+# Function: writehtmlhead
+#
+# Description:
+#	write the head of html type of email for input author.
+#
+################################################################
+function writehtmlhead
+{
+	# get the input parameters
+	istate=$1
+	inhtml=$2
+
+	# check null for input parameters
+	if [ -z ${istate} ] || [ -z ${inhtml} ]
+	then
+		exit 1
+	fi
+
+	# write head for input author
+	strline=$(printf "%-87s" "=")
+	> ${inhtml}
+
+	echo "<!DOCTYPE html><html><head><title>Remind Email</title><style>" >>${inhtml}
+	echo "table { cellpadding:2; cellspacing:0; width:80%; border-collapse:collapse;}" >>${inhtml}
+	echo "table, td, th { border: 1px solid black; }" >>${inhtml}
+	echo "th { height:40px; background-color:cadetblue;}" >>${inhtml}
+	echo "tr.ts0 { background-color:gainsboro;}" >>${inhtml}
+	echo "tr.ts1 { background-color:snow;}" >>${inhtml}
+	echo "td { height:25px; vertical-align:center; font-size:14px;}" >>${inhtml}
+	echo "p.t0 { font:italic bold 12px/30px Georgia,serif; }</style></head>" >>${inhtml}
+	echo "<body>${strline// /=}<br>&nbsp;&nbsp;<b>THIS IS AN AUTOMATED MESSAGE. PLEASE DO NOT " >>${inhtml}
+	echo " RESPOND TO THE FROM ADDRESS.</b><br>${strline// /=}<br><br>" >>${inhtml}
+	echo "Dear CodeStriker user,<br><br>" >>${inhtml}
+
+	if [ "${istate}" == "5" ]
+	then
+		curstate="Pending"
+		limitdays="7"
+		nextaction="Please Delete these topics ASAP within one week."
+	else
+		curstate="Open"
+		limitdays="30"
+		nextaction="Please Update these topics to 'Committed' or 'Closed with Rework' ASAP within one week."
+	fi
+
+	echo "The table below lists topics which are <b>${curstate}</b> for an extended period" >>${inhtml}
+	echo " of time which larger than <b>${limitdays}</b> days.<br><br>" >>${inhtml}
+	echo "<b>${nextaction}</b><br><br>" >>${inhtml}
+	echo "<table align=\"center\"><tr><th width=10%>Topic ID</th><th width=50%>Title</th>" >>${inhtml}
+	echo "<th width=20%>Create Time</th><th width=10%>State</th><th width=10%>Days</th></tr>" >>${inhtml}
+}
+
+
+
+
+
+################################################################
+#
+# Function: writehtmltable
+#
+# Description:
+#	write the topic table into html file for each author.
+#
+################################################################
+function writehtmltable
+{
+	# get input parameters.
+	idx=$1
+	topicid=$2
+	topicti=$3
+	topicct=$4
+	alldays=$5
+	htmlname=$6
+	tstate=$7
+
+	# check null for input parameters
+	if [ -z ${idx} ] || [ -z ${topicid} ] ||\
+		[ -z "${topicti}" ] || [ -z "${topicct}" ] ||\
+		[ -z ${alldays} ] || [ -z ${tstate} ] ||\
+		[ ! -f ${htmlname} ]
+	then
+		exit 1
+	fi
+
+	# check Pending or Open
+	if [ ${tstate} == "5" ]
+	then
+		mystate="Pending"
+	else
+		mystate="Open"
+	fi
+
+	# write topic table into html file
+	if [ $(expr ${idx} % 2) == "0" ]
+	then
+		echo "<tr class=\"ts0\">" >>${htmlname}
+	else
+		echo "<tr class=\"ts1\">" >>${htmlname}
+	fi
+
+	echo "<td align=\"center\"><a href=\"${SERVERURL}${topicid}\">${topicid}</a></td>" >>${htmlname}
+	echo "<td><a href=\"${SERVERURL}${topicid}\">${topicti}</a></td>" >>${htmlname}
+	echo "<td align=\"center\">${topicct}</td><td align=\"center\">${mystate}</td>" >>${htmlname}
+	echo "<td align=\"center\"><font color=\"red\"><b>${alldays}</b></font></td></tr>" >>${htmlname}
+}
+
+
+
+
+################################################################
+#
+# Function: writehtmlending
+#
+# Description:
+#	write the ending of html type of email for input author.
+#
+################################################################
+function writehtmlending
+{
+	# get the input parameters
+	nstate=$1
+	inhtml=$2
+
+	# check null for input parameters
+	if [ -z ${nstate} ] || [ ! -f ${inhtml} ]
+	then
+		exit 1
+	fi
+
+	# write ending for input html file
+	echo "</table>" >>${inhtml}
+	if [ "${nstate}" == "5" ]
+	then
+		echo "<p class=\"t0\">Please follow below steps to delete your Pending topics:<br>" >>${inhtml}
+		echo "(1). Login <a href=\"http://lssweb5.ih.lucent.com/codestriker/codestriker.pl\">" >>${inhtml}
+		echo " CodeStriker Main Page</a> with your mail address;<br>" >>${inhtml}
+		echo "(2). Click your name which 'YOUR ROLE' is 'Author(creator)' and 'TOPIC STATE' is 'Pending';<br> " >>${inhtml}
+		echo "(3). Select those topics according to 'Title' listed in above table;<br>" >>${inhtml}
+		echo "(4). Select 'Deleted' in 'Change state', then click 'Update' to delete those topics.<br><br></p>" >>${inhtml}
+	else
+		echo "<p class=\"t0\">Please follow below steps to update your Open topics:<br>" >>${inhtml}
+		echo "(1). Click on each topic link from the above table;<br>" >>${inhtml}
+		echo "(2). Check 'Inspector Data' of all critical reviewers have been submitted, " >>${inhtml}
+		echo "and 'Moderator Summary Data' also be submitted in 'Topic Information';<br>" >>${inhtml}
+		echo "(3). In 'Topic Properties' page:<br>" >>${inhtml}
+		echo "&nbsp;$nbsp If <font color=\"red\">all</font> critical reviewers submit with" >>${inhtml}
+		echo " '<font color=\"red\">proceed</font>', and Moderator submit with " >>${inhtml}
+		echo " '<font color=\"red\">Proceed</font>'," >>${inhtml}
+		echo " select '<font color=\"red\">Committed</font>' and submit it; <br>" >>${inhtml}
+		echo "&nbsp;$nbsp If <font color=\"red\">not all</font> 'proceed', select" >>${inhtml} 
+		echo " '<font color=\"red\">Closed with Rework</font>' and submit it.<br></p>" >>${inhtml}
+	fi
+
+	echo "<br>Thank you for your co-operation and apologies for any inconvenience.<br><br>" >>${inhtml}
+	echo "If you have any questions, please open a help desk ticket at:<a href=\"http://lssweb.ih.lucent.com\">" >>${inhtml}
+	echo "<b>CodeStriker HelpDesk</b></a>.<br><br>" >>${inhtml}
+	echo "Best regards,<br>CodeStriker Team</body></html>" >>${inhtml}
+}
+
+
+
+
+
+################################################################
+#
+# Function: sendemail
+#
+# Description:
+#	send mail to author who topics in Pending or Open state
+#	are more than 7 or 30 days.
+#
+################################################################
+function sendemail
+{
+	# get the input parameter
+	tsates=$1
+	tomail=$2
+	thcont=$3
+
+	# check null for input parameters
+	if [ -z ${tsates} ] || [ -z ${tomail} ] || [ -z ${thcont} ]
+	then
+		exit 1
+	fi
+
+	# check the input state
+	if [ "${tsates}" == "5" ]
+	then
+		subject="!!!REMINDER!!!  Please delete topics in Pending state."
+	else
+		subject="!!!REMINDER!!!  Please update state of these Open topics to Committed or Closed with Rework."
+	fi
+
+	# send mail to remind author to delete topics or update state.
+	sdate=$(date "+%Y-%m-%d_%H:%M:%S")
+	esubject=${subject}"---"${sdate}
+	SUBJECT="Subject: ${esubject}"
+	TO="To: ${tomail}"
+
+	cat ${thcont} | formail -I "${FROM}" -I "${TO}" -I "${VERSION}" -I "${CONTTYPE}" -I "${SUBJECT}" | /usr/sbin/sendmail -oi ${tomail}
+
+}
+
+
+
+
+################################################################
+#
+# Function: checkandsendmail
+#
+# Description:
+#	check and get topics which exist in Pending or Open state
+#	are more than 7 or 30 days; then send mail to remind author
+#	to update state:
+#	For Pending topics, should remove them;
+#	For Open topics, should update the state to 'Committed'
+#	or 'Closed with Rework'.
+#
+################################################################
+function checkandsendmail
+{
+	# get input parameter
+	instate=$1
+	statelimit=$2
+	statelimit2=$3
+
+	# get authors according to input state
+	allau=`getauthors ${instate} "${statelimit}" "${statelimit2}"`
+
+	# get topics and send email for each author
+	if [ "${allau}" != "" ]
+	then
+		# loop authors, get topics and send email
+		for eachau in ${allau}
+		do
+			# generate html filename for each author
+			eachtml=`gethtmlname ${eachau}`
+
+			# get topics for each author
+			#ptopics=$(echo "select id from topic where state=${instate} and author=\"${eachau}\" and ${statelimit};" | ${DBACCESSCMD})
+			ptopics=$(echo "select id from topic where state=${instate} and author=\"${eachau}\" and ${statelimit} and ${statelimit2};" | ${DBACCESSCMD})
+			ptopics=${ptopics:3}
+
+			if [ "${ptopics}" != "" ]
+			then
+				# write head of html file for each author
+				writehtmlhead ${instate} ${eachtml}
+
+				# for each topic, get title,create time.
+				index=0
+				for eachto in ${ptopics}
+				do
+					# get title and create time for each topic.
+					etitle=$(echo "select title from topic where id=${eachto} and author=\"${eachau}\";" | ${DBACCESSCMD})
+					ectime=$(echo "select creation_ts from topic where id=${eachto} and author=\"${eachau}\";" | ${DBACCESSCMD})
+
+					etitle=${etitle:6}
+					ectime=${ectime:12}
+
+					# count the days of topic exists.
+					curdate=$(date "+%Y-%m-%d %H:%M:%S")
+					ndays=$(date2days `echo ${curdate} | sed 's/-/ /g;s/:/ /g'`)
+					cdays=$(date2days `echo ${ectime} | sed 's/-/ /g;s/:/ /g'`)
+					edays=`expr ${ndays} - ${cdays}`
+
+					# write topic info into html file.
+					writehtmltable ${index} ${eachto} "${etitle}" "${ectime}" ${edays} "${eachtml}" ${instate}
+					((index++))
+				done
+
+				# write ending of html file for each author
+				writehtmlending ${instate} ${eachtml}
+			fi
+
+			# send email to each author
+			if [ -f ${eachtml} ]
+			then
+				sendemail ${instate} "jack.hua@nokia-sbell.com" ${eachtml}
+				#sendemail ${instate} ${eachau} ${eachtml}
+				rm -rf ${eachtml}
+			fi
+		done
+	fi
+}
+
+
+
+
+
+# Main function
+
+
+# check and get authors which topics in Pending state,
+# if those topics exist more than 7 days, send email
+# to remind them to remove them.
+checkandsendmail 5 "${PCTIME}" "${PLTIME}" 
+
+# check and get authors which topics in Open state,
+# if those topics exist more than 30 days, send email
+# to remind them to update state to 'Committed' or
+# 'Closed with Rework'.
+#checkandsendmail 0 "${OPENLIMITTIME}"
+
+
+
+# delete test
+#delresult=$(echo "delete from commentstate where topicid=206245699999;" | ${DBACCESSCMD})
+
+#echo ${delresult}
